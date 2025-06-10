@@ -28,7 +28,7 @@ npm install
 npm install react react-dom react-icons react-markdown react-router-dom lottie-react @google/generative-ai react-speech-recognition vite dotenv lucide-react
 ```
 ### 3. Create a .env file
-Replace your_api_key_here with your actual API key from Google MakerSuite
+Replace your_api_key_here with your actual API key 
 ```bash
 VITE_GOOGLE_API_KEY=your_api_key_here
 ```
