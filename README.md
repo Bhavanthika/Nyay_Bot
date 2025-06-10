@@ -1,7 +1,8 @@
-Nyay Bot – AI Legal Assistant
+𝐍𝐲𝐚𝐲 𝐁𝐨𝐭 – 𝐀𝐈 𝐋𝐞𝐠𝐚𝐥 𝐀𝐬𝐬𝐢𝐬𝐭𝐚𝐧𝐭
+
 Nyay Bot is an AI-powered legal assistant designed to provide simplified, accessible legal information to users through natural conversation. Built using React and Google's Generative AI, the bot supports multilingual interactions and features a clean, user-friendly interface.
 
-🚀 Features
+🚀 𝐅𝐞𝐚𝐭𝐮𝐫𝐞𝐬
 💬 Conversational Interface – Ask legal questions in plain language
 
 🌐 Multilingual Support – Communicate in multiple Indian languages
@@ -14,7 +15,6 @@ Nyay Bot is an AI-powered legal assistant designed to provide simplified, access
 
 
 📁 Project Setup
-
 1.Clone the repository 
 
   git clone https://github.com/Bhavanthika/Nyay_Bot.git 
