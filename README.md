@@ -24,7 +24,7 @@ cd Nyay_Bot
 ```
 ### 2. Install Dependencies
 ```bash
-npm instal 
+npm install 
 npm install react react-dom react-icons react-markdown react-router-dom lottie-react @google/generative-ai react-speech-recognition vite dotenv lucide-react
 ```
 ### 3. Create a .env file
