@@ -479,7 +479,13 @@ updatedHistory[activeChatIndex] = {
         </div>
       )}
 
-      <div className="w-full flex flex-col items-center py-6 px-4">
+<div
+  className={`w-full absolute bottom-0 px-4 pt-4 pb-6 ${
+    darkMode ? "bg-[#121212]" : "bg-[#fffff]"
+  }`}
+>
+
+      <div className="w-full flex flex-col items-center">
         <div
           className={`w-full md:w-[80%] lg:w-[60%] text-sm py-2 flex items-center rounded-full ${
             darkMode ? "bg-[#222222]" : "bg-white border border-gray-300"
@@ -513,10 +519,11 @@ updatedHistory[activeChatIndex] = {
           </div>
         </div>
         <p className="text-gray-400 text-xs mt-4 text-center px-4">
-          &copy; {new Date().getFullYear()} Nyay Bot. All rights reserved. | Disclaimer: This is an AI legal assistant developed by Bhavanthika Selvarajan and does not replace professional legal advice. 
+          &copy; {new Date().getFullYear()} Nyay Bot. All rights reserved. | Disclaimer: This is an AI legal assistant developed by Bhavanthika Selvarajan and does not replace professional legal advice.
         </p>
       </div>
     </div>
+  </div>
       
   );
 };
