@@ -479,44 +479,47 @@ updatedHistory[activeChatIndex] = {
         </div>
       )}
 
-      <div className="w-full flex flex-col items-center py-6 px-4">
-        <div
-          className={`w-full md:w-[80%] lg:w-[60%] text-sm py-2 flex items-center rounded-full ${
-            darkMode ? "bg-[#222222]" : "bg-white border border-gray-300"
-          }`}
+      <div className="fixed bottom-0 w-full bg-white dark:bg-black z-50 px-4 py-4">
+  <div className="w-full flex flex-col items-center">
+    <div
+      className={`w-full md:w-[80%] lg:w-[60%] text-sm py-2 flex items-center rounded-full ${
+        darkMode ? "bg-[#222222]" : "bg-white border border-gray-300"
+      }`}
+    >
+      <input
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+        type="text"
+        className="p-2 pl-4 bg-transparent flex-1 outline-none border-none"
+        placeholder="Write your message here..."
+        onKeyDown={(e) => {
+          if (e.key === "Enter") hitRequest();
+        }}
+      />
+      <div className="flex items-center pr-4">
+        <i
+          style={{ color: listening ? "#FF4D4F" : darkMode ? "white" : "#333" }}
+          className="text-lg mr-4 cursor-pointer"
+          onClick={toggleListening}
         >
-          <input
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            type="text"
-            className="p-2 pl-4 bg-transparent flex-1 outline-none border-none"
-            placeholder="Write your message here..."
-            onKeyDown={(e) => {
-              if (e.key === "Enter") hitRequest();
-            }}
-          />
-          <div className="flex items-center pr-4">
-            <i
-              style={{ color: listening ? "#FF4D4F" : darkMode ? "white" : "#333" }}
-              className="text-lg mr-4 cursor-pointer"
-              onClick={toggleListening}
-            >
-              {listening ? <BsFillMicMuteFill /> : <BsFillMicFill />}
-            </i>
-            <i
-              style={{ color: darkMode ? "white" : "#333" }}
-              className="text-lg cursor-pointer"
-              onClick={hitRequest}
-            >
-              <IoSend />
-            </i>
-          </div>
-        </div>
-        <p className="text-gray-400 text-xs mt-4 text-center px-4">
-          &copy; {new Date().getFullYear()} Nyay Bot. All rights reserved. | Disclaimer: This is an AI legal assistant developed by Bhavanthika Selvarajan and does not replace professional legal advice. 
-        </p>
+          {listening ? <BsFillMicMuteFill /> : <BsFillMicFill />}
+        </i>
+        <i
+          style={{ color: darkMode ? "white" : "#333" }}
+          className="text-lg cursor-pointer"
+          onClick={hitRequest}
+        >
+          <IoSend />
+        </i>
       </div>
     </div>
+    <p className="text-gray-400 text-xs mt-4 text-center px-4">
+      &copy; {new Date().getFullYear()} Nyay Bot. All rights reserved. | Disclaimer: This is an AI legal assistant developed by Bhavanthika Selvarajan and does not replace professional legal advice.
+    </p>
+  </div>
+</div>
+</div>
+      
   );
 };
 
