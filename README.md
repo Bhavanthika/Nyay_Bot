@@ -12,20 +12,36 @@ Nyay Bot is an AI-powered legal assistant designed to provide simplified, access
 
 🕘 Chat History – View and revisit past conversations
 
-📁 Project Setup
-1. Clone the repository
-   git clone https://github.com/Bhavanthika/Nyay_Bot.git
-   cd Nyay_Bot
-   
-2. Install dependencies
-   npm instal
-   npm install react react-dom react-icons react-markdown react-router-dom lottie-react @google/generative-ai react-speech-recognition vite dotenv lucide-react
-   
-3. Create a .env file in the root of your project.
-   VITE_GOOGLE_API_KEY=your_api_key_here
-   Replace your_api_key_here with your actual API key from Google MakerSuite
-   
-4. Start the development server
-   npm run dev
+🚀 How to Run Nyay Bot
+Clone the repository
+
+bash
+Copy
+Edit
+git clone https://github.com/Bhavanthika/Nyay_Bot.git
+cd Nyay_Bot
+Install dependencies
+
+bash
+Copy
+Edit
+npm install
+npm install react react-dom react-icons react-markdown react-router-dom lottie-react @google/generative-ai react-speech-recognition vite dotenv lucide-react
+Create a .env file in the root of your project
+
+Inside .env, add:
+
+ini
+Copy
+Edit
+VITE_GOOGLE_API_KEY=your_api_key_here
+Replace your_api_key_here with your actual API key from Google MakerSuite.
+
+Start the development server
+
+bash
+Copy
+Edit
+npm run dev
 
 
