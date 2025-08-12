@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react"; 
 import "./App.css";
 import { FaBalanceScale, FaGavel, FaMoon, FaSun } from "react-icons/fa";
 import { GiJusticeStar } from "react-icons/gi";
@@ -9,7 +9,9 @@ import Lottie from "lottie-react";
 import AIAnimation from "./Animation_AI.json";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import ReactMarkdown from 'react-markdown';
-import { PlusCircle } from "lucide-react";
+import { MessageSquarePlus } from 'lucide-react';
+import { v4 as uuidv4 } from "uuid";
+import { IoIosArrowBack, IoIosArrowForward } from "react-icons/io";
 import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
 
 
@@ -21,9 +23,14 @@ const App = () => {
   const [lastLegalTopic, setLastLegalTopic] = useState("");
   const [darkMode, setDarkMode] = useState(true);
 
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+
+
   const [chatHistory, setChatHistory] = useState([]);
   const [activeChatIndex, setActiveChatIndex] = useState(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [userId, setUserId] = useState("");
 
   const { transcript, resetTranscript, listening, browserSupportsSpeechRecognition } =
     useSpeechRecognition();
@@ -41,6 +48,70 @@ const App = () => {
       setActiveChatIndex(activeChatIndex - 1);
     }
   };
+
+    const handleVoiceInput = async () => {
+    if (!listening) {
+      // Start recording
+      setListening(true);
+      audioChunksRef.current = [];
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        setListening(false);
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const audioBase64 = await blobToBase64(audioBlob);
+        const transcript = await sendAudioToGoogleSpeech(audioBase64);
+        if (transcript) {
+          setInput(transcript);
+        }
+      };
+
+      mediaRecorder.start();
+      setTimeout(() => {
+        mediaRecorder.stop(); // Automatically stop after 5 seconds
+      }, 5000);
+    }
+  };
+
+  const blobToBase64 = (blob) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result.split(',')[1]);
+      reader.readAsDataURL(blob);
+    });
+  };
+
+  const sendAudioToGoogleSpeech = async (base64Audio) => {
+    const apiKey = import.meta.env.VITE_GOOGLE_API_KEY;
+    const response = await fetch(`https://speech.googleapis.com/v1/speech:recognize?key=${apiKey}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        config: {
+          encoding: "WEBM_OPUS",
+          sampleRateHertz: 48000,
+          languageCode: "en-US"
+        },
+        audio: {
+          content: base64Audio
+        }
+      })
+    });
+
+    const data = await response.json();
+    return data.results?.[0]?.alternatives?.[0]?.transcript || "";
+  };
+
 
    const generateChatTitle = (msgs) => {
     const firstUserMsg = msgs.find(m => m.type === "userMsg");
@@ -113,8 +184,17 @@ function groupChatsByDate(chats) {
   return groupedChats;
 }
 
-  const generateResponse = async (msg) => {
-    try {
+const generateResponse = async (msg) => {
+  try {
+    const userMsgTime = new Date().toISOString();
+
+    // Show the user's message and a "Typing..." response immediately
+    const userMessage = { type: "userMsg", text: msg, timestamp: userMsgTime };
+    const loadingMessage = { type: "responseMsg", text: "Typing...", isHtml: false, timestamp: null, loading: true };
+
+    let updatedMessages = [...(activeChatIndex !== null ? messages : []), userMessage, loadingMessage];
+    setMessages(updatedMessages); // Show messages immediately
+
     const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GOOGLE_API_KEY);
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
@@ -122,46 +202,38 @@ function groupChatsByDate(chats) {
     const result = await model.generateContent(prompt);
     const responseText = await result.response.text();
 
-    const userMsgTime = new Date().toISOString();
     const responseTime = new Date().toISOString();
 
-    const newMessages = [
-  { type: "userMsg", text: msg, timestamp: userMsgTime },
-  { type: "responseMsg", text: responseText, isHtml: true, timestamp: responseTime }
-];
+    const realResponse = { type: "responseMsg", text: responseText, isHtml: true, timestamp: responseTime };
 
+    // Replace "Typing..." with the real response
+    updatedMessages = updatedMessages.map((m) =>
+      m.loading ? realResponse : m
+    );
+    setMessages(updatedMessages);
+
+    // Update chat history
     let updatedHistory = [...chatHistory];
+    const newMessages = [userMessage, realResponse];
 
     if (activeChatIndex !== null) {
-      // Append to the existing chat conversation
       const updatedConversation = [...updatedHistory[activeChatIndex].conversation, ...newMessages];
-updatedHistory[activeChatIndex] = {
-  ...updatedHistory[activeChatIndex],
-  conversation: updatedConversation,
-  title: generateChatTitle(updatedConversation),
-  createdAt: new Date().toISOString()  // <-- Add this line
-};
-
-      
+      updatedHistory[activeChatIndex] = {
+        ...updatedHistory[activeChatIndex],
+        conversation: updatedConversation,
+        title: generateChatTitle(updatedConversation),
+        createdAt: new Date().toISOString()
+      };
     } else {
-      // Create a new chat conversation
       updatedHistory.push({
-  title: generateChatTitle(newMessages),
-  conversation: newMessages,
-  createdAt: new Date().toISOString()  // <-- Add this line
-});
-
+        title: generateChatTitle(newMessages),
+        conversation: newMessages,
+        createdAt: new Date().toISOString()
+      });
     }
 
     setChatHistory(updatedHistory);
-    setActiveChatIndex(
-      activeChatIndex !== null ? activeChatIndex : updatedHistory.length - 1
-    );
-    setMessages(
-      activeChatIndex !== null
-        ? [...messages, ...newMessages]
-        : newMessages
-    );
+    setActiveChatIndex(activeChatIndex !== null ? activeChatIndex : updatedHistory.length - 1);
     setIsResponseScreen(true);
     setMessage("");
     setLastLegalTopic(msg);
@@ -171,6 +243,8 @@ updatedHistory[activeChatIndex] = {
   }
 };
 
+
+
   const hitRequest = () => {
     if (message.trim()) {
       generateResponse(message.trim());
@@ -178,16 +252,42 @@ updatedHistory[activeChatIndex] = {
       alert("You must write something!");
     }
   };
+  const quotes = [
+  {
+    text: "Justice means giving everyone their fair share.",
+    author: "Ulpian",
+    icon: <FaBalanceScale />,
+  },
+  {
+    text: "The power of the gavel lies in its finality.",
+    author: "Johnnie Cochran",
+    icon: <FaGavel />,
+  },
+  {
+    text: "Equality before the law is the foundation of freedom.",
+    author: "John Adams",
+    icon: <GiJusticeStar />,
+  },
+  {
+    text: "Knowledge of the law is the guardian of liberty.",
+    author: "Edward Coke",
+    icon: <PiBooksDuotone />,
+  },
+];
+
+const [current, setCurrent] = useState(0);
+
+const nextQuote = () => {
+  setCurrent((prev) => (prev + 1) % quotes.length);
+};
+
+const prevQuote = () => {
+  setCurrent((prev) => (prev - 1 + quotes.length) % quotes.length);
+};
 
   
-
- const newChat = () => {
-  setIsResponseScreen(false);
-  setMessages([]);
-  setMessage("");
-  setLastLegalTopic("");
-  setActiveChatIndex(null);
-  resetTranscript();
+const newChat = () => {
+  window.location.reload(); // 🔁 Reloads the whole page
 };
 
 
@@ -196,6 +296,26 @@ updatedHistory[activeChatIndex] = {
   setDarkMode(newMode);
   localStorage.setItem("darkMode", JSON.stringify(newMode));
 };
+
+const [showMenuId, setShowMenuId] = useState(null);
+let pressTimer = null;
+
+const handlePressStart = (id) => {
+  pressTimer = setTimeout(() => {
+    setShowMenuId(id);
+  }, 800);
+};
+
+const handlePressEnd = () => {
+  clearTimeout(pressTimer);
+};
+
+useEffect(() => {
+  const handleClickOutside = () => setShowMenuId(null);
+  window.addEventListener("click", handleClickOutside);
+  return () => window.removeEventListener("click", handleClickOutside);
+}, []);
+
 
   
   const toggleListening = () => {
@@ -219,6 +339,31 @@ updatedHistory[activeChatIndex] = {
     chatContainer.scrollTop = chatContainer.scrollHeight;
   }
 }, [messages]);
+
+useEffect(() => {
+  let storedId = localStorage.getItem("chat_user_id");
+  if (!storedId) {
+    storedId = uuidv4();
+    localStorage.setItem("chat_user_id", storedId);
+  }
+  setUserId(storedId);
+}, []);
+
+useEffect(() => {
+  if (userId) {
+    const savedChats = localStorage.getItem(`chat_history_${userId}`);
+    if (savedChats) {
+      setChatHistory(JSON.parse(savedChats));
+    }
+  }
+}, [userId]);
+
+useEffect(() => {
+  if (userId) {
+    localStorage.setItem(`chat_history_${userId}`, JSON.stringify(chatHistory));
+  }
+}, [chatHistory, userId]);
+
 
 
   useEffect(() => {
@@ -246,7 +391,7 @@ updatedHistory[activeChatIndex] = {
         <div
   className={`fixed top-0 left-0 h-full w-[260px] z-40 transition-transform transform ${
     isSidebarOpen ? "translate-x-0" : "-translate-x-full"
-  } ${darkMode ? "bg-gray-800 text-white" : "bg-white border-r border-gray-300"}`}
+  } ${darkMode ? "bg-[#222222] text-white" : "bg-white border-r border-gray-300"}`}
 >
   {/* Header */}
   <div className="flex justify-between items-center px-4 py-3">
@@ -259,14 +404,16 @@ updatedHistory[activeChatIndex] = {
   {Object.entries(groupChatsByDate(chatHistory)).map(([groupName, chats]) => (
     <div key={groupName}>
       <h4 className="font-semibold text-sm mb-2 px-2">{groupName}</h4>
-      {chats.map((chat, idx) => {
-        const realIndex = chatHistory.findIndex(c => c === chat);
+      {chats.map((chat) => {
+        const realIndex = chatHistory.indexOf(chat);
+        const isActive = activeChatIndex === realIndex;
 
         return (
           <div
             key={realIndex}
-            className={`group w-full flex justify-between items-center px-3 py-2 rounded-md text-sm cursor-pointer relative
-              ${activeChatIndex === realIndex ? "bg-[#2c09c5] text-white font-semibold" : ""}
+            className={`
+              group w-full flex justify-between items-center px-3 py-2 rounded-md text-sm cursor-pointer relative
+              ${isActive ? "bg-gray-200 text-black font-semibold" : "hover:bg-gray-200 hover:text-black"}
             `}
             onClick={() => {
               setMessages(chat.conversation);
@@ -274,34 +421,44 @@ updatedHistory[activeChatIndex] = {
               setActiveChatIndex(realIndex);
               setIsSidebarOpen(false);
             }}
-            onMouseEnter={e => {
-              if (activeChatIndex !== realIndex) {
-                e.currentTarget.style.backgroundColor = "#2c09c5";
-                e.currentTarget.style.color = "white";
-              }
-            }}
-            onMouseLeave={e => {
-              if (activeChatIndex !== realIndex) {
-                e.currentTarget.style.backgroundColor = "transparent";
-                e.currentTarget.style.color = "inherit";
-              }
-            }}
+            onMouseDown={() => handlePressStart(realIndex)}
+            onTouchStart={() => handlePressStart(realIndex)}
+            onMouseUp={handlePressEnd}
+            onTouchEnd={handlePressEnd}
+            onMouseLeave={handlePressEnd}
           >
-            <span>{chat.title}</span>
+            <span className="truncate w-[80%]">{chat.title}</span>
 
-            {/* Dot button with delete on hover */}
-            <div
-              className="relative"
-              onClick={e => e.stopPropagation()} // Prevent triggering the parent click
-            >
-              <button className="text-white font-bold px-2"></button>
-
+            {/* Dots & Delete Menu */}
+            <div className="relative z-20" onClick={(e) => e.stopPropagation()}>
               <button
-                className="absolute right-0 top-full mt-1 bg-gray-600 text-white rounded px-2 py-1 text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                onClick={() => deleteChat(realIndex)}
+                className="text-xl px-2 hover:text-black"
+                onClick={() => setShowMenuId(realIndex)}
               >
-                Delete
+                ⋮
               </button>
+
+              {showMenuId === realIndex && (
+  <div
+    className={`absolute right-0 top-full mt-1 rounded shadow z-50 border ${
+      darkMode
+        ? "bg-[#2b2b2b] border-gray-700 text-white"
+        : "bg-white border-gray-300 text-black"
+    }`}
+  >
+    <button
+      onClick={() => {
+        deleteChat(realIndex);
+        setShowMenuId(null);
+      }}
+       className={`block w-full px-4 py-2 text-sm text-left 
+        ${darkMode ? "text-white" : "text-black"}`}
+    >
+      Delete
+    </button>
+  </div>
+)}
+
             </div>
           </div>
         );
@@ -310,81 +467,72 @@ updatedHistory[activeChatIndex] = {
   ))}
 </div>
 
-
-
-          <div className="px-4 py-2 ">
-            <button
-              onClick={() => {
-                setChatHistory([]);
-                setMessages([]);
-                setActiveChatIndex(null);
-                setIsResponseScreen(false);
-              }}
-              className="w-full px-3 py-2 rounded-md bg-red-500 text-white hover:bg-red-600"
-            >
-              Delete All Chats
-            </button>
-          </div>
-        </div>
-
-      
-
+<div className="px-4 py-2">
+  <button
+    onClick={() => {
+      setChatHistory([]);
+      setMessages([]);
+      setActiveChatIndex(null);
+      setIsResponseScreen(false);
+    }}
+    className="w-full px-3 py-2 rounded-md bg-red-500 text-white hover:bg-red-600"
+  >
+    Delete All Chats
+  </button>
+</div>
+</div>
         {/* CHATBOT CONTAINER */}
   
     {/* Hamburger in top-left corner inside container */}
     
-    {!isSidebarOpen && (
-      <div
+    {/* Sidebar Toggle Button (☰) */}
+{!isSidebarOpen && (
+  <div
     onClick={() => setIsSidebarOpen(true)}
-    className={`absolute top-4 left-4 m-2 p-2 rounded-full cursor-pointer z-50 ${
-      darkMode ? "bg-gray-700 text-white" : "bg-white text-black border border-gray-300"
-    } hover:scale-105 transition`}
+    className={`fixed top-4 left-4 p-2 rounded-full cursor-pointer z-50
+      ${
+        darkMode
+          ? "bg-gray-700 text-white"
+          : "bg-white text-black border border-gray-300"
+      } hover:scale-105 transition`}
     title="Open Chat History"
   >
     ☰
   </div>
-    )}    
-        </div>
-
-        {/* DARK/LIGHT MODE TOGGLE BUTTON FIXED TOP RIGHT */}
-  <div
-  onClick={toggleDarkMode}
-  className={`absolute top-4 right-4 m-2 p-2 rounded-full cursor-pointer z-50 ${
-    darkMode ? "bg-gray-800 text-yellow-400" : "bg-gray-200 text-gray-700"
-  } hover:scale-105 transition`}
-  title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
->
-  {darkMode ? <FaSun size={20} /> : <FaMoon size={20} />}
+)}
 </div>
 
-   
+ {/* Top-right controls: New Chat first, then Mode Toggle */}
+<div className="fixed top-4 right-4 z-50 flex items-center gap-2">
+  {/* New Chat Button */}
+  <div onClick={newChat} className="cursor-pointer hover:scale-105 transition" title="New Chat">
+    <MessageSquarePlus size={30} strokeWidth={2.2} />
+  </div>
+
+  {/* Mode Toggle Button */}
+  <div
+    onClick={toggleDarkMode}
+    className={`ml-1 p-2 rounded-full cursor-pointer hover:scale-105 transition ${
+      darkMode ? "bg-gray-700 text-yellow-400" : "bg-gray-200 text-gray-700"
+    }`}
+    title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+  >
+    {darkMode ? <FaSun size={20} /> : <FaMoon size={20} />}
+  </div>
+</div>
+ 
       {isResponseScreen ? (   
          <div className={`flex-1 transition-margin duration-300 ease-in-out ${isSidebarOpen ? "ml-[100px]" : "ml-0"}`}
          >     
         <div className="flex flex-col h-[80vh]">
           <div className="pt-6 flex items-center justify-between w-full px-4 md:px-16 lg:px-60">
   <div className="w-full flex justify-center md:justify-start px-4 md:px-8">
-  <h2 className="animated-gradient text-2xl md:text-3xl font-semibold font-serif tracking-wide pb-1 mb-6">
-    Nyay Bot
-  </h2>
+  
+<h2 className="fixed top-4 left-1/2 transform -translate-x-1/2 animated-gradient text-2xl md:text-3xl font-semibold font-serif tracking-wide pb-1 mb-6 z-30">
+  Nyay Bot
+</h2>
+
 </div>
-
-  <div className="flex items-center gap-4">
-   <button
-  className={`absolute top-4 right-20 m-2 px-4 py-2 rounded-full font-medium z-40 flex items-center gap-2 transition-all duration-300 ease-in-out transform hover:scale-105
-    ${
-      darkMode
-        ? "bg-gradient-to-r from-[#1a1a1a] to-[#333] text-white hover:from-[#2a2a2a] hover:to-[#444] shadow-lg"
-        : "bg-gradient-to-r from-white to-gray-100 border border-gray-300 text-black hover:from-gray-100 hover:to-gray-200 shadow-md"
-    }`}
-  onClick={newChat}
->
-  <PlusCircle size={20} strokeWidth={2.2} />
-  New Chat
-</button>
-
-
-  </div>
 </div>
 
           <div className="flex-1 overflow-y-auto px-4 md:px-16 lg:px-60 mt-6">
@@ -437,51 +585,67 @@ updatedHistory[activeChatIndex] = {
 </h2>
 
 </div>
-  
-            <div className="boxes mt-[30px] flex flex-wrap items-center gap-4 justify-center w-full px-2">
-              {[
-                {
-                  text: "Justice means giving everyone their fair share.",
-                  author: "Ulpian",
-                  icon: <FaBalanceScale />,
-                },
-                {
-                  text: "The power of the gavel lies in its finality.",
-                  author: "Johnnie Cochran",
-                  icon: <FaGavel />,
-                },
-                {
-                  text: "Equality before the law is the foundation of freedom.",
-                  author: "John Adams",
-                  icon: <GiJusticeStar />,
-                },
-                {
-                  text: "Knowledge of the law is the guardian of liberty.",
-                  author: "Edward Coke",
-                  icon: <PiBooksDuotone />,
-                },
-              ].map((card, index) => (
-                <div
-                  key={index}
-                  className={`card w-[45vw] sm:w-[180px] h-[180px] rounded-lg relative p-4 text-center shadow-md ${
-                    darkMode ? "bg-[#1f1f1f] text-gray-100" : "bg-white text-gray-900 border"
-                  }`}
-                >
-                  <p className="text-[16px] font-serif italic">
-                    {card.text}
-                    <br />– {card.author}
-                  </p>
-                  <i className="absolute right-3 bottom-3 text-[18px]">{card.icon}</i>
-                </div>
-              ))}
-            </div>
+<div className="w-full flex justify-center items-center my-6">
+  <div
+    className={`group relative w-[90vw] max-w-sm h-[220px] rounded-xl p-4 transition-all duration-300 flex items-center ${
+      darkMode ? "bg-[#2a2a2a] text-gray-100" : "bg-white text-gray-900 border"
+    }`}
+  >
+    {/* Left Arrow (hover only) */}
+    <button
+      onClick={prevQuote}
+      className="absolute left-2 top-1/2 -translate-y-1/2 text-2xl text-gray-400 opacity-0 group-hover:opacity-100 transition"
+    >
+      <IoIosArrowBack />
+    </button>
+
+    {/* Centered Quote Content */}
+    <div className="w-full flex flex-col items-center justify-center text-center px-4 space-y-2">
+      {/* Quote Text */}
+     {/* Quote Text */}
+{/* Quote Text */}
+<p
+  className={`text-2xl sm:text-2xl italic font-serif text-center leading-relaxed ${
+    darkMode ? "text-white" : "text-black"
+  }`}
+>
+  {quotes[current].text}
+</p>
+
+{/* Author */}
+<p
+  className={`mt-2 font-medium text-lg sm:text-1xl text-center ${
+    darkMode ? "text-white" : "text-black"
+  }`}
+>
+  -{quotes[current].author}
+</p>
+
+
+    </div>
+
+    {/* Icon in bottom right corner */}
+    <div className="absolute bottom-3 right-4 text-4xl text-green-500">
+      {quotes[current].icon}
+    </div>
+
+    {/* Right Arrow (hover only) */}
+    <button
+      onClick={nextQuote}
+      className="absolute right-2 top-1/2 -translate-y-1/2 text-2xl text-gray-400 opacity-0 group-hover:opacity-100 transition"
+    >
+      <IoIosArrowForward />
+    </button>
+  </div>
+</div>
+
           </div>
         </div>
       )}
 
 <div
   className={`w-full absolute bottom-0 px-4 pt-4 pb-6 ${
-    darkMode ? "bg-[#121212]" : "bg-[#fffff]"
+    darkMode ? "bg-[#0E0E0E]" : "bg-[#fffff]"
   }`}
 >
 
@@ -518,9 +682,10 @@ updatedHistory[activeChatIndex] = {
             </i>
           </div>
         </div>
-        <p className="text-gray-400 text-xs mt-4 text-center px-4">
-          &copy; {new Date().getFullYear()} Nyay Bot. All rights reserved. | Disclaimer: This is an AI legal assistant developed by Bhavanthika Selvarajan and does not replace professional legal advice.
-        </p>
+       <p className="text-gray-400 text-xs text-center mt-4">
+  © {new Date().getFullYear()} Nyay Bot by Bhavanthika Selvarajan – AI legal assistant, not a substitute for professional legal advice.
+</p>
+
       </div>
     </div>
   </div>
